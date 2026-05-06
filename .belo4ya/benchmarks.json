@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "providers": {
+    "yandex-cloud": {
+      "terraform_dir": "yandex-cloud/terraform",
+      "shared_terraform_dir": "yandex-cloud/shared/terraform",
+      "name_prefix": "postgresbench-yc",
+      "cloud_init_template": ".belo4ya/templates/client-cloud-init.yaml.tftpl",
+      "ssh_user": "postgresbench",
+      "cloud": {
+        "cloud_id": "b1g4kfp4qu27rpl3hvrf",
+        "folder_id": "b1gfie3oennae9j1bvn7",
+        "zone": "ru-central1-b",
+        "subnet_cidr_blocks": ["10.10.0.0/24"],
+        "ssh_cidr_blocks": ["0.0.0.0/0"],
+        "service_account_id": "ajeietrbobnc9c16fv9s",
+        "service_account_key_file": ".belo4ya/secrets/yandex-cloud/sa/postgresbench/postgresbench-sa-key.json",
+        "ssh_public_key_path": "~/.ssh/postgresbench.pub",
+        "ssh_private_key_path": "~/.ssh/postgresbench"
+      },
+      "defaults": {
+        "postgres": {
+          "database": "postgresbench",
+          "user": "postgresbench",
+          "password_env": "POSTGRESBENCH_DB_PASSWORD",
+          "password_default": "Qwerty123!",
+          "port": 6432,
+          "sslmode": "prefer",
+          "version": "18",
+          "max_connections": 315,
+          "user_conn_limit": 300
+        },
+        "benchmark": {
+          "clients": 256,
+          "threads": 16,
+          "duration": 600,
+          "query_mode": "prepared",
+          "progress_seconds": 30,
+          "cluster_size": 1,
+          "tuned": "no",
+          "comment": ""
+        },
+        "remote": {
+          "base_dir": "/opt/postgresbench",
+          "bin_dir": "/opt/postgresbench/bin",
+          "env_dir": "/etc/postgresbench",
+          "log_dir": "/opt/postgresbench/logs",
+          "repo_dir": "/opt/postgresbench/PostgresBench"
+        },
+        "benchmark_repo": {
+          "url": "https://github.com/ClickHouse/PostgresBench.git",
+          "ref": "main"
+        }
+      },
+      "scenarios": {
+        "yc_4cpu_16gb_6849_network_ssd": {
+          "name_suffix": "4-16-6849-network-ssd",
+          "output_json": "yandex-cloud/results/yc_4cpu_16gb_6849_network_ssd.json",
+          "client": {
+            "vcpus": 8,
+            "ram_gb": 16,
+            "disk_gb": 30,
+            "disk_type": "network-ssd",
+            "platform_id": "standard-v3",
+            "image_family": "ubuntu-2404-lts"
+          },
+          "postgres": {
+            "resource_preset": "s4a-c4-m16",
+            "vcpus": 4,
+            "ram_gb": 16,
+            "storage": {
+              "type": "network-ssd",
+              "size_gb": 1250,
+              "description": "1250 GB - network-ssd (20/40K IOPS)"
+            }
+          },
+          "benchmark": {
+            "system_name": "Yandex Cloud Managed Service for PostgreSQL (network-ssd)",
+            "instance_type": "s4a-c4-m16",
+            "vcpus": 4,
+            "ram_gb": 16,
+            "instance_storage": "",
+            "primary_storage": "1250 GB - network-ssd (20/40K IOPS)",
+            "scale_factor": 6849
+          }
+        },
+        "yc_16cpu_64gb_6849_network_ssd": {
+          "name_suffix": "16-64-6849-network-ssd",
+          "output_json": "yandex-cloud/results/yc_16cpu_64gb_6849_network_ssd.json",
+          "client": {
+            "vcpus": 16,
+            "ram_gb": 32,
+            "disk_gb": 30,
+            "disk_type": "network-ssd",
+            "platform_id": "standard-v3",
+            "image_family": "ubuntu-2404-lts"
+          },
+          "postgres": {
+            "resource_preset": "s4a-c16-m64",
+            "vcpus": 16,
+            "ram_gb": 64,
+            "storage": {
+              "type": "network-ssd",
+              "size_gb": 1250,
+              "description": "1250 GB - network-ssd (20/40K IOPS)"
+            }
+          },
+          "benchmark": {
+            "system_name": "Yandex Cloud Managed Service for PostgreSQL (network-ssd)",
+            "instance_type": "s4a-c16-m64",
+            "vcpus": 16,
+            "ram_gb": 64,
+            "instance_storage": "",
+            "primary_storage": "1250 GB - network-ssd (20/40K IOPS)",
+            "scale_factor": 6849
+          }
+        },
+        "yc_16cpu_64gb_34247_network_ssd": {
+          "name_suffix": "16-64-34247-network-ssd",
+          "output_json": "yandex-cloud/results/yc_16cpu_64gb_34247_network_ssd.json",
+          "client": {
+            "vcpus": 16,
+            "ram_gb": 32,
+            "disk_gb": 30,
+            "disk_type": "network-ssd",
+            "platform_id": "standard-v3",
+            "image_family": "ubuntu-2404-lts"
+          },
+          "postgres": {
+            "resource_preset": "s4a-c16-m64",
+            "vcpus": 16,
+            "ram_gb": 64,
+            "storage": {
+              "type": "network-ssd",
+              "size_gb": 1250,
+              "description": "1250 GB - network-ssd (20/40K IOPS)"
+            }
+          },
+          "benchmark": {
+            "system_name": "Yandex Cloud Managed Service for PostgreSQL (network-ssd)",
+            "instance_type": "s4a-c16-m64",
+            "vcpus": 16,
+            "ram_gb": 64,
+            "instance_storage": "",
+            "primary_storage": "1250 GB - network-ssd (20/40K IOPS)",
+            "scale_factor": 34247
+          }
+        }
+      }
+    }
+  }
+}

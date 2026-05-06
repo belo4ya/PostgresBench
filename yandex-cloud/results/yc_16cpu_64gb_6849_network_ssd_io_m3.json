@@ -1,0 +1,63 @@
+{
+  "system": "Yandex Cloud (network-ssd-io-m3)",
+  "date": "2026-05-11",
+  "instance": {
+    "type": "s4a-c16-m64",
+    "vcpus": 16,
+    "ram_gb": 64,
+    "instance_storage": "",
+    "primary_storage": "837 GB - network-ssd-io-m3 (75/40K IOPS)"
+  },
+  "machine": "16vCPU, 64GB RAM",
+  "cluster_size": 1,
+  "tuned": "no",
+  "comment": "",
+  "postgres_version": "18.3 (Ubuntu 18.3-201-yandex.62246.5dc19800eb)",
+  "benchmark": {
+    "tool": "pgbench",
+    "workload": "TPC-B (built-in)",
+    "scale_factor": 6849,
+    "clients": 256,
+    "threads": 16,
+    "duration": 600,
+    "query_mode": "prepared"
+  },
+  "load": {
+    "load_time_seconds": 1024.259
+  },
+  "results": [
+    {
+      "run": 1,
+      "tps": 8877.393545,
+      "transactions": 5320068,
+      "failed_transactions": 0,
+      "latency_avg_ms": 28.794,
+      "latency_stddev_ms": 12.127,
+      "initial_connection_time_ms": 742.909,
+      "latency_p95_ms": 42.360,
+      "latency_p99_ms": 78.087
+    },
+    {
+      "run": 2,
+      "tps": 8779.280709,
+      "transactions": 5261330,
+      "failed_transactions": 0,
+      "latency_avg_ms": 29.132,
+      "latency_stddev_ms": 11.906,
+      "initial_connection_time_ms": 738.164,
+      "latency_p95_ms": 42.754,
+      "latency_p99_ms": 82.010
+    },
+    {
+      "run": 3,
+      "tps": 9348.821593,
+      "transactions": 5602647,
+      "failed_transactions": 0,
+      "latency_avg_ms": 27.356,
+      "latency_stddev_ms": 7.265,
+      "initial_connection_time_ms": 742.567,
+      "latency_p95_ms": 38.673,
+      "latency_p99_ms": 49.622
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+---
+- name: Start full benchmark as a durable remote systemd unit
+  hosts: postgresbench_clients
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Create benchmark environment directory
+      ansible.builtin.file:
+        path: "{{ remote.env_dir }}"
+        state: directory
+        owner: root
+        group: "{{ ansible_user }}"
+        mode: "0750"
+
+    - name: Render benchmark environment
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/pgbench-run.env.j2"
+        dest: "{{ remote.env_file }}"
+        owner: root
+        group: "{{ ansible_user }}"
+        mode: "0640"
+
+    - name: Install benchmark service unit
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/postgresbench.service.j2"
+        dest: "/etc/systemd/system/{{ systemd_unit }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      register: benchmark_service
+
+    - name: Reload systemd units
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: benchmark_service.changed
+
+    - name: Check benchmark unit state
+      ansible.builtin.command: "systemctl is-active {{ systemd_unit }}"
+      register: unit_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse to start duplicate benchmark
+      ansible.builtin.fail:
+        msg: "Benchmark unit {{ systemd_unit }} is already active"
+      when: unit_active.rc == 0
+
+    - name: Reset previous benchmark unit failure state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - reset-failed
+          - "{{ systemd_unit }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Start benchmark unit
+      ansible.builtin.systemd_service:
+        name: "{{ systemd_unit }}"
+        state: started
+      register: benchmark_unit
+
+    - name: Show benchmark unit
+      ansible.builtin.debug:
+        var: benchmark_unit.status

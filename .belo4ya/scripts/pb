@@ -1,0 +1,494 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
+CATALOG="$ROOT_DIR/.belo4ya/benchmarks.json"
+DEFAULT_RUN_ROOT="$ROOT_DIR/.belo4ya/.runs"
+ANSIBLE_DIR="$ROOT_DIR/.belo4ya/ansible"
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  .belo4ya/scripts/pb list
+  .belo4ya/scripts/pb shared-render PROVIDER [--run-dir DIR]
+  .belo4ya/scripts/pb shared-terraform-init PROVIDER [--run-dir DIR]
+  .belo4ya/scripts/pb shared-terraform-plan PROVIDER [--run-dir DIR]
+  .belo4ya/scripts/pb shared-terraform-apply PROVIDER [--run-dir DIR]
+  .belo4ya/scripts/pb shared-terraform-destroy PROVIDER [--run-dir DIR]
+  .belo4ya/scripts/pb shared-terraform-output PROVIDER [--run-dir DIR]
+  .belo4ya/scripts/pb render PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb inventory PROVIDER SCENARIO [--run-dir DIR] [--terraform-output FILE]
+  .belo4ya/scripts/pb terraform-init PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb terraform-plan PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb terraform-apply PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb terraform-destroy PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb ansible-setup PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb ansible-smoke PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb ansible-start PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb ansible-status PROVIDER SCENARIO [--run-dir DIR]
+  .belo4ya/scripts/pb ansible-fetch PROVIDER SCENARIO [--run-dir DIR]
+USAGE
+}
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+default_run_dir() {
+  local provider=$1
+  local scenario=$2
+  printf '%s/%s/%s\n' "$DEFAULT_RUN_ROOT" "$provider" "$scenario"
+}
+
+default_shared_run_dir() {
+  local provider=$1
+  printf '%s/%s/shared\n' "$DEFAULT_RUN_ROOT" "$provider"
+}
+
+parse_common_opts() {
+  RUN_DIR=$(default_run_dir "$PROVIDER" "$SCENARIO")
+  SHARED_RUN_DIR=$(default_shared_run_dir "$PROVIDER")
+  TERRAFORM_OUTPUT_FILE=""
+
+  while (($#)); do
+    case "$1" in
+      --run-dir)
+        [[ $# -ge 2 ]] || die "--run-dir requires a value"
+        RUN_DIR=$2
+        shift 2
+        ;;
+      --terraform-output)
+        [[ $# -ge 2 ]] || die "--terraform-output requires a value"
+        TERRAFORM_OUTPUT_FILE=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "Unknown option: $1"
+        ;;
+    esac
+  done
+}
+
+parse_shared_opts() {
+  RUN_DIR=$(default_shared_run_dir "$PROVIDER")
+
+  while (($#)); do
+    case "$1" in
+      --run-dir)
+        [[ $# -ge 2 ]] || die "--run-dir requires a value"
+        RUN_DIR=$2
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "Unknown option: $1"
+        ;;
+    esac
+  done
+}
+
+require_provider() {
+  [[ -n "${PROVIDER:-}" ]] || die "Provider is required"
+
+  jq -e --arg provider "$PROVIDER" '
+    .providers[$provider] != null
+  ' "$CATALOG" >/dev/null || die "Unknown provider: $PROVIDER"
+}
+
+require_provider_scenario() {
+  [[ -n "${PROVIDER:-}" ]] || die "Provider is required"
+  [[ -n "${SCENARIO:-}" ]] || die "Scenario is required"
+
+  jq -e --arg provider "$PROVIDER" --arg scenario "$SCENARIO" '
+    .providers[$provider].scenarios[$scenario] != null
+  ' "$CATALOG" >/dev/null || die "Unknown scenario: $PROVIDER $SCENARIO"
+}
+
+provider_terraform_dir() {
+  jq -er --arg provider "$PROVIDER" '.providers[$provider].terraform_dir' "$CATALOG"
+}
+
+provider_shared_terraform_dir() {
+  jq -er --arg provider "$PROVIDER" '.providers[$provider].shared_terraform_dir' "$CATALOG"
+}
+
+shared_jq() {
+  jq -S --arg provider "$PROVIDER" '
+    .providers[$provider] as $p
+    | {
+        provider: $provider,
+        terraform_dir: $p.shared_terraform_dir,
+        name: (($p.name_prefix + "-shared") | gsub("[^A-Za-z0-9-]"; "-") | ascii_downcase),
+        cloud: {
+          cloud_id: $p.cloud.cloud_id,
+          folder_id: $p.cloud.folder_id,
+          zone: $p.cloud.zone,
+          subnet_cidr_blocks: $p.cloud.subnet_cidr_blocks,
+          ssh_cidr_blocks: $p.cloud.ssh_cidr_blocks,
+          service_account_key_file: $p.cloud.service_account_key_file,
+          postgres_port: $p.defaults.postgres.port
+        }
+      }
+  ' "$CATALOG"
+}
+
+scenario_jq() {
+  local shared_state_path
+  shared_state_path="$(default_shared_run_dir "$PROVIDER")/terraform.tfstate"
+
+  jq -S --arg provider "$PROVIDER" --arg scenario "$SCENARIO" --arg shared_state_path "$shared_state_path" '
+    .providers[$provider] as $p
+    | $p.scenarios[$scenario] as $s
+    | {
+        provider: $provider,
+        scenario: $scenario,
+        terraform_dir: $p.terraform_dir,
+        name: (($p.name_prefix + "-" + $s.name_suffix) | gsub("[^A-Za-z0-9-]"; "-") | ascii_downcase),
+        cloud: {
+          cloud_id: $p.cloud.cloud_id,
+          folder_id: $p.cloud.folder_id,
+          zone: $p.cloud.zone,
+          service_account_id: $p.cloud.service_account_id,
+          service_account_key_file: $p.cloud.service_account_key_file,
+          ssh_public_key_path: $p.cloud.ssh_public_key_path,
+          ssh_private_key_path: $p.cloud.ssh_private_key_path,
+          shared_state_path: $shared_state_path
+        },
+        ssh_user: $p.ssh_user,
+        cloud_init_template: $p.cloud_init_template,
+        client: $s.client,
+        postgres: (
+          $p.defaults.postgres
+          + $s.postgres
+          + {
+              database: $p.defaults.postgres.database,
+              user: $p.defaults.postgres.user,
+              password_env: $p.defaults.postgres.password_env,
+              password_default: $p.defaults.postgres.password_default,
+              port: $p.defaults.postgres.port,
+              sslmode: $p.defaults.postgres.sslmode,
+              version: $p.defaults.postgres.version,
+              max_connections: $p.defaults.postgres.max_connections,
+              user_conn_limit: $p.defaults.postgres.user_conn_limit
+            }
+        ),
+        benchmark: (
+          $p.defaults.benchmark
+          + $s.benchmark
+          + {out_json: $s.output_json}
+        ),
+        remote: (
+          $p.defaults.remote
+          + {
+              work_dir: ($p.defaults.remote.base_dir + "/work/" + $scenario),
+              env_file: ($p.defaults.remote.env_dir + "/" + $scenario + ".env"),
+              runner_path: ($p.defaults.remote.bin_dir + "/run-benchmark"),
+              systemd_unit: ("postgresbench-" + ($provider | gsub("[^A-Za-z0-9-]"; "-")) + "-" + ($scenario | gsub("[^A-Za-z0-9-]"; "-")))
+            }
+        ),
+        benchmark_repo: $p.defaults.benchmark_repo,
+        min_postgres_connections: $p.defaults.postgres.max_connections
+      }
+  ' "$CATALOG"
+}
+
+cmd_list() {
+  need_cmd jq
+  jq -r '
+    .providers
+    | to_entries[]
+    | .key as $provider
+    | .value.scenarios
+    | keys[]
+    | "\($provider) \(.)"
+  ' "$CATALOG"
+}
+
+cmd_shared_render() {
+  need_cmd jq
+  require_provider
+  mkdir -p "$RUN_DIR"
+
+  shared_jq >"$RUN_DIR/shared.json"
+
+  jq -S '{
+    provider_id: .provider,
+    name,
+    cloud
+  }' "$RUN_DIR/shared.json" >"$RUN_DIR/terraform.auto.tfvars.json"
+
+  printf '%s/terraform.tfstate\n' "$RUN_DIR" >"$RUN_DIR/terraform.tfstate.path"
+  printf 'path = "%s/terraform.tfstate"\n' "$RUN_DIR" >"$RUN_DIR/backend.hcl"
+
+  echo "Rendered shared: $RUN_DIR"
+}
+
+cmd_render() {
+  need_cmd jq
+  require_provider_scenario
+  mkdir -p "$RUN_DIR"
+
+  scenario_jq >"$RUN_DIR/scenario.json"
+
+  jq -S '{
+    provider_id: .provider,
+    scenario,
+    name,
+    cloud,
+    ssh_user,
+    cloud_init_template,
+    client,
+    postgres,
+    benchmark
+  }' "$RUN_DIR/scenario.json" >"$RUN_DIR/terraform.auto.tfvars.json"
+
+  jq -S '{
+    provider,
+    scenario,
+    ssh_private_key_path: .cloud.ssh_private_key_path,
+    pgdatabase: .postgres.database,
+    pgsslmode: .postgres.sslmode,
+    min_postgres_connections,
+    required_pgbench_connections: .postgres.user_conn_limit,
+    benchmark: .benchmark,
+    benchmark_repo,
+    remote,
+    systemd_unit: .remote.systemd_unit
+  }' "$RUN_DIR/scenario.json" >"$RUN_DIR/ansible-vars.json"
+
+  printf '%s/terraform.tfstate\n' "$RUN_DIR" >"$RUN_DIR/terraform.tfstate.path"
+  printf 'path = "%s/terraform.tfstate"\n' "$RUN_DIR" >"$RUN_DIR/backend.hcl"
+
+  echo "Rendered: $RUN_DIR"
+}
+
+terraform_run() {
+  local tf_dir=$1
+  shift
+  mkdir -p "$ROOT_DIR/.belo4ya/.cache/terraform/plugin-cache"
+  TF_DATA_DIR="$RUN_DIR/.terraform" \
+    TF_PLUGIN_CACHE_DIR="$ROOT_DIR/.belo4ya/.cache/terraform/plugin-cache" \
+    terraform -chdir="$ROOT_DIR/$tf_dir" "$@"
+}
+
+terraform_init() {
+  local tf_dir=$1
+  terraform_run "$tf_dir" init -backend-config="$RUN_DIR/backend.hcl" -reconfigure
+}
+
+ensure_terraform_init() {
+  local tf_dir=$1
+  [[ -d "$RUN_DIR/.terraform/providers" ]] || terraform_init "$tf_dir" >/dev/null
+}
+
+jq_output_value() {
+  local file=$1
+  local name=$2
+  jq -er --arg name "$name" '.[$name].value // empty' "$file"
+}
+
+cmd_inventory() {
+  need_cmd jq
+  require_provider_scenario
+  cmd_render >/dev/null
+
+  if [[ -z "$TERRAFORM_OUTPUT_FILE" ]]; then
+    need_cmd terraform
+    local tf_dir
+    tf_dir=$(provider_terraform_dir)
+    TERRAFORM_OUTPUT_FILE="$RUN_DIR/terraform-output.json"
+    ensure_terraform_init "$tf_dir"
+    terraform_run "$tf_dir" output -json >"$TERRAFORM_OUTPUT_FILE"
+  fi
+
+  [[ -f "$TERRAFORM_OUTPUT_FILE" ]] || die "Terraform output JSON not found: $TERRAFORM_OUTPUT_FILE"
+
+  local client_public_ip ssh_user postgres_host postgres_port postgres_user postgres_password postgres_database
+  local ssh_private_key_path
+  client_public_ip=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" client_public_ip)
+  ssh_user=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" ssh_user)
+  ssh_private_key_path=$(jq -er '.ssh_private_key_path' "$RUN_DIR/ansible-vars.json")
+  postgres_host=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" postgres_host)
+  postgres_port=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" postgres_port)
+  postgres_user=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" postgres_user)
+  postgres_password=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" postgres_password)
+  postgres_database=$(jq_output_value "$TERRAFORM_OUTPUT_FILE" postgres_database)
+
+  {
+    echo "[postgresbench_clients]"
+    echo "postgresbench-client ansible_host=$client_public_ip ansible_user=$ssh_user ansible_ssh_private_key_file=$ssh_private_key_path"
+    echo
+    echo "[postgresbench_clients:vars]"
+    echo "provider=$PROVIDER"
+    echo "scenario=$SCENARIO"
+    echo "postgres_host=$postgres_host"
+    echo "postgres_port=$postgres_port"
+    echo "postgres_user=$postgres_user"
+    echo "postgres_password=$postgres_password"
+    echo "postgres_database=$postgres_database"
+  } >"$RUN_DIR/inventory.ini"
+
+  echo "Inventory: $RUN_DIR/inventory.ini"
+}
+
+require_shared_state() {
+  local shared_state_path
+  shared_state_path=$(jq -er '.cloud.shared_state_path' "$RUN_DIR/terraform.auto.tfvars.json")
+  [[ -f "$shared_state_path" ]] || die "Shared Terraform state is missing: $shared_state_path. Run: $0 shared-terraform-apply $PROVIDER"
+}
+
+cmd_terraform() {
+  local action=$1
+  need_cmd terraform
+  require_provider_scenario
+  cmd_render >/dev/null
+
+  local tf_dir
+  tf_dir=$(provider_terraform_dir)
+
+  case "$action" in
+    init)
+      terraform_init "$tf_dir"
+      ;;
+    plan)
+      ensure_terraform_init "$tf_dir"
+      require_shared_state
+      terraform_run "$tf_dir" plan -var-file="$RUN_DIR/terraform.auto.tfvars.json"
+      ;;
+    apply)
+      ensure_terraform_init "$tf_dir"
+      require_shared_state
+      terraform_run "$tf_dir" apply -var-file="$RUN_DIR/terraform.auto.tfvars.json"
+      cmd_inventory
+      ;;
+    destroy)
+      ensure_terraform_init "$tf_dir"
+      require_shared_state
+      terraform_run "$tf_dir" destroy -var-file="$RUN_DIR/terraform.auto.tfvars.json"
+      ;;
+    *)
+      die "Unknown terraform action: $action"
+      ;;
+  esac
+}
+
+cmd_shared_terraform() {
+  local action=$1
+  need_cmd terraform
+  require_provider
+  cmd_shared_render >/dev/null
+
+  local tf_dir
+  tf_dir=$(provider_shared_terraform_dir)
+
+  case "$action" in
+    init)
+      terraform_init "$tf_dir"
+      ;;
+    plan)
+      ensure_terraform_init "$tf_dir"
+      terraform_run "$tf_dir" plan -var-file="$RUN_DIR/terraform.auto.tfvars.json"
+      ;;
+    apply)
+      ensure_terraform_init "$tf_dir"
+      terraform_run "$tf_dir" apply -var-file="$RUN_DIR/terraform.auto.tfvars.json"
+      ;;
+    destroy)
+      ensure_terraform_init "$tf_dir"
+      terraform_run "$tf_dir" destroy -var-file="$RUN_DIR/terraform.auto.tfvars.json"
+      ;;
+    output)
+      ensure_terraform_init "$tf_dir"
+      terraform_run "$tf_dir" output
+      ;;
+    *)
+      die "Unknown shared terraform action: $action"
+      ;;
+  esac
+}
+
+cmd_ansible() {
+  local playbook=$1
+  need_cmd ansible-playbook
+  require_provider_scenario
+  cmd_render >/dev/null
+
+  [[ -f "$RUN_DIR/inventory.ini" ]] || die "Inventory is missing. Run: $0 inventory $PROVIDER $SCENARIO"
+
+  ANSIBLE_CONFIG="$ANSIBLE_DIR/ansible.cfg" \
+    ANSIBLE_HOME="$ROOT_DIR/.belo4ya/.cache/ansible/home" \
+    ANSIBLE_LOCAL_TEMP="$ROOT_DIR/.belo4ya/.cache/ansible/tmp" \
+    ansible-playbook \
+    -i "$RUN_DIR/inventory.ini" \
+    "$ANSIBLE_DIR/playbooks/$playbook.yml" \
+    -e "@$RUN_DIR/ansible-vars.json" \
+    -e "local_run_dir=$RUN_DIR"
+}
+
+main() {
+  local command=${1:-}
+  [[ -n "$command" ]] || { usage; exit 1; }
+  shift || true
+
+  case "$command" in
+    list)
+      [[ $# -eq 0 ]] || die "list does not accept arguments"
+      cmd_list
+      ;;
+    shared-render|shared-terraform-init|shared-terraform-plan|shared-terraform-apply|shared-terraform-destroy|shared-terraform-output)
+      [[ $# -ge 1 ]] || die "$command requires PROVIDER"
+      PROVIDER=$1
+      shift 1
+      parse_shared_opts "$@"
+      case "$command" in
+        shared-render) cmd_shared_render ;;
+        shared-terraform-init) cmd_shared_terraform init ;;
+        shared-terraform-plan) cmd_shared_terraform plan ;;
+        shared-terraform-apply) cmd_shared_terraform apply ;;
+        shared-terraform-destroy) cmd_shared_terraform destroy ;;
+        shared-terraform-output) cmd_shared_terraform output ;;
+      esac
+      ;;
+    render|inventory|terraform-init|terraform-plan|terraform-apply|terraform-destroy|ansible-setup|ansible-smoke|ansible-start|ansible-status|ansible-fetch)
+      [[ $# -ge 2 ]] || die "$command requires PROVIDER and SCENARIO"
+      PROVIDER=$1
+      SCENARIO=$2
+      shift 2
+      parse_common_opts "$@"
+      case "$command" in
+        render) cmd_render ;;
+        inventory) cmd_inventory ;;
+        terraform-init) cmd_terraform init ;;
+        terraform-plan) cmd_terraform plan ;;
+        terraform-apply) cmd_terraform apply ;;
+        terraform-destroy) cmd_terraform destroy ;;
+        ansible-setup) cmd_ansible setup ;;
+        ansible-smoke) cmd_ansible smoke ;;
+        ansible-start) cmd_ansible start-benchmark ;;
+        ansible-status) cmd_ansible status ;;
+        ansible-fetch) cmd_ansible fetch-results ;;
+      esac
+      ;;
+    -h|--help|help)
+      usage
+      ;;
+    *)
+      die "Unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,63 @@
+{
+  "system": "Selectel",
+  "date": "2026-05-08",
+  "instance": {
+    "type": "flex",
+    "vcpus": 4,
+    "ram_gb": 16,
+    "instance_storage": "",
+    "primary_storage": "180 GB - SSD NVMe (25/15K IOPS)"
+  },
+  "machine": "4vCPU, 16GB RAM",
+  "cluster_size": 1,
+  "tuned": "no",
+  "comment": "",
+  "postgres_version": "17.9 (Ubuntu 17.9-1.pgdg22.04+1ubuntu4)",
+  "benchmark": {
+    "tool": "pgbench",
+    "workload": "TPC-B (built-in)",
+    "scale_factor": 6849,
+    "clients": 256,
+    "threads": 16,
+    "duration": 600,
+    "query_mode": "prepared"
+  },
+  "load": {
+    "load_time_seconds": 1487.168
+  },
+  "results": [
+    {
+      "run": 1,
+      "tps": 2460.579077,
+      "transactions": 1475557,
+      "failed_transactions": 0,
+      "latency_avg_ms": 103.953,
+      "latency_stddev_ms": 57.443,
+      "initial_connection_time_ms": 996.875,
+      "latency_p95_ms": 203.428,
+      "latency_p99_ms": 307.153
+    },
+    {
+      "run": 2,
+      "tps": 2402.227393,
+      "transactions": 1436668,
+      "failed_transactions": 0,
+      "latency_avg_ms": 106.466,
+      "latency_stddev_ms": 53.394,
+      "initial_connection_time_ms": 2726.141,
+      "latency_p95_ms": 229.228,
+      "latency_p99_ms": 290.228
+    },
+    {
+      "run": 3,
+      "tps": 2574.019069,
+      "transactions": 1543206,
+      "failed_transactions": 0,
+      "latency_avg_ms": 99.390,
+      "latency_stddev_ms": 45.306,
+      "initial_connection_time_ms": 913.039,
+      "latency_p95_ms": 185.464,
+      "latency_p99_ms": 263.581
+    }
+  ]
+}

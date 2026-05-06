@@ -1,0 +1,27 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+
+packages:
+  - python3
+  - python3-apt
+  - sudo
+
+users:
+  - default
+  - name: ${ssh_user}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/postgresbench-client
+    permissions: "0644"
+    content: |
+      provider=${provider}
+      scenario=${scenario}
+
+runcmd:
+  - [ cloud-init-per, once, postgresbench-ready, touch, /var/lib/cloud/instance/postgresbench-ready ]

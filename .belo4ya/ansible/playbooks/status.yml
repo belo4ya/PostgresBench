@@ -1,0 +1,39 @@
+---
+- name: Show benchmark status
+  hosts: postgresbench_clients
+  gather_facts: false
+  vars:
+    remote_result_path: "{{ remote.repo_dir }}/{{ benchmark.out_json }}"
+    remote_log_path: "{{ remote.log_dir }}/{{ scenario }}.log"
+  tasks:
+    - name: Read systemd unit properties
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ systemd_unit }}"
+          - "--property=LoadState,ActiveState,SubState,Result,ExecMainStatus"
+          - "--no-pager"
+      register: unit_status
+      changed_when: false
+      failed_when: false
+
+    - name: Check result JSON
+      ansible.builtin.stat:
+        path: "{{ remote_result_path }}"
+      register: result_json
+
+    - name: Check benchmark log
+      ansible.builtin.stat:
+        path: "{{ remote_log_path }}"
+      register: benchmark_log
+
+    - name: Print status summary
+      ansible.builtin.debug:
+        msg:
+          unit: "{{ systemd_unit }}"
+          systemd: "{{ unit_status.stdout_lines }}"
+          result_json_exists: "{{ result_json.stat.exists }}"
+          result_json_path: "{{ remote_result_path }}"
+          log_exists: "{{ benchmark_log.stat.exists }}"
+          log_path: "{{ remote_log_path }}"

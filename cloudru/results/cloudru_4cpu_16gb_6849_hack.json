@@ -1,0 +1,63 @@
+{
+  "system": "Cloud.ru (hack)",
+  "date": "2026-05-11",
+  "instance": {
+    "type": "gen-4-16",
+    "vcpus": 4,
+    "ram_gb": 16,
+    "instance_storage": "",
+    "primary_storage": "1050 GB - SSD NVMe (50K IOPS)"
+  },
+  "machine": "4vCPU, 16GB RAM",
+  "cluster_size": 1,
+  "tuned": "no",
+  "comment": "",
+  "postgres_version": "18.3 (Debian 18.3-1.pgdg13+1)",
+  "benchmark": {
+    "tool": "pgbench",
+    "workload": "TPC-B (built-in)",
+    "scale_factor": 6849,
+    "clients": 256,
+    "threads": 16,
+    "duration": 600,
+    "query_mode": "prepared"
+  },
+  "load": {
+    "load_time_seconds": 939.037
+  },
+  "results": [
+    {
+      "run": 1,
+      "tps": 4369.264547,
+      "transactions": 2617904,
+      "failed_transactions": 0,
+      "latency_avg_ms": 58.569,
+      "latency_stddev_ms": 26.880,
+      "initial_connection_time_ms": 1095.387,
+      "latency_p95_ms": 112.618,
+      "latency_p99_ms": 136.120
+    },
+    {
+      "run": 2,
+      "tps": 4452.153420,
+      "transactions": 2667191,
+      "failed_transactions": 0,
+      "latency_avg_ms": 57.482,
+      "latency_stddev_ms": 27.140,
+      "initial_connection_time_ms": 1139.457,
+      "latency_p95_ms": 113.842,
+      "latency_p99_ms": 137.983
+    },
+    {
+      "run": 3,
+      "tps": 4526.115460,
+      "transactions": 2711485,
+      "failed_transactions": 0,
+      "latency_avg_ms": 56.545,
+      "latency_stddev_ms": 27.124,
+      "initial_connection_time_ms": 1122.318,
+      "latency_p95_ms": 115.234,
+      "latency_p99_ms": 138.914
+    }
+  ]
+}

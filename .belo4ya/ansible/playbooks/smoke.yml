@@ -1,0 +1,53 @@
+---
+- name: Smoke test benchmark client and PostgreSQL connectivity
+  hosts: postgresbench_clients
+  gather_facts: false
+  vars:
+    postgres_env:
+      PGHOST: "{{ postgres_host }}"
+      PGPORT: "{{ postgres_port | string }}"
+      PGUSER: "{{ postgres_user }}"
+      PGPASSWORD: "{{ postgres_password }}"
+      PGDATABASE: "{{ postgres_database }}"
+      PGSSLMODE: "{{ pgsslmode }}"
+  tasks:
+    - name: Wait for PostgreSQL endpoint
+      ansible.builtin.wait_for:
+        host: "{{ postgres_host }}"
+        port: "{{ postgres_port }}"
+        timeout: 120
+
+    - name: Verify psql connectivity
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -v
+          - ON_ERROR_STOP=1
+          - -tAc
+          - select 1;
+      environment: "{{ postgres_env }}"
+      changed_when: false
+
+    - name: Read max_connections
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -v
+          - ON_ERROR_STOP=1
+          - -tAc
+          - show max_connections;
+      environment: "{{ postgres_env }}"
+      register: max_connections
+      changed_when: false
+
+    - name: Require enough server connections for pgbench clients
+      ansible.builtin.assert:
+        that:
+          - (max_connections.stdout | trim | int) >= min_postgres_connections
+        fail_msg: >-
+          max_connections={{ max_connections.stdout | trim }} is below
+          required {{ min_postgres_connections }}
+
+    - name: Verify pgbench is installed
+      ansible.builtin.command: pgbench --version
+      changed_when: false

@@ -1,0 +1,17 @@
+[Unit]
+Description=PostgresBench {{ provider }} {{ scenario }}
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ ansible_user }}
+Group={{ ansible_user }}
+WorkingDirectory={{ remote.repo_dir }}
+ExecStart={{ remote.runner_path }} {{ remote.env_file }}
+Restart=no
+KillSignal=SIGINT
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE=${1:?usage: run-benchmark ENV_FILE}
+
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
+
+mkdir -p "$(dirname "$OUT_JSON")" "$WORKDIR" "$LOG_DIR"
+
+cd "$REPO_DIR"
+chmod +x ./run.sh ./generate-results.sh
+
+./run.sh >"$LOG_FILE" 2>&1

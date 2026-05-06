@@ -1,0 +1,36 @@
+---
+- name: Fetch benchmark results and logs
+  hosts: postgresbench_clients
+  gather_facts: false
+  vars:
+    result_artifact_dir: "{{ local_run_dir }}/artifacts"
+    remote_result_path: "{{ remote.repo_dir }}/{{ benchmark.out_json }}"
+    remote_log_path: "{{ remote.log_dir }}/{{ scenario }}.log"
+  tasks:
+    - name: Check result JSON
+      ansible.builtin.stat:
+        path: "{{ remote_result_path }}"
+      register: result_json
+
+    - name: Fail when result JSON is missing
+      ansible.builtin.fail:
+        msg: "Benchmark result is not present yet: {{ remote_result_path }}"
+      when: not result_json.stat.exists
+
+    - name: Fetch result JSON
+      ansible.builtin.fetch:
+        src: "{{ remote_result_path }}"
+        dest: "{{ result_artifact_dir }}/{{ benchmark.out_json | basename }}"
+        flat: true
+
+    - name: Check benchmark log
+      ansible.builtin.stat:
+        path: "{{ remote_log_path }}"
+      register: benchmark_log
+
+    - name: Fetch benchmark log
+      ansible.builtin.fetch:
+        src: "{{ remote_log_path }}"
+        dest: "{{ result_artifact_dir }}/{{ scenario }}.log"
+        flat: true
+      when: benchmark_log.stat.exists
