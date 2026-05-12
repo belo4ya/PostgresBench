@@ -1,6 +1,6 @@
 {
   "system": "Yandex Cloud (local-ssd)",
-  "date": "2026-05-11",
+  "date": "2026-05-10",
   "instance": {
     "type": "s4a-c4-m16",
     "vcpus": 4,

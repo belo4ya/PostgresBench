@@ -1,6 +1,6 @@
 {
   "system": "Yandex Cloud (network-ssd-io-m3)",
-  "date": "2026-05-11",
+  "date": "2026-05-10",
   "instance": {
     "type": "s4a-c16-m64",
     "vcpus": 16,

@@ -66,8 +66,8 @@ network-ssd-io-m3:
 
 local-ssd:
 
-- [ ] 4CPU/16Gi, SF=6849, 368Gi local-ssd (260K/230K IOPS), 3 hosts
-- [ ] 16CPU/64Gi, SF=6849, 736Gi local-ssd (260K/230K IOPS), 3 hosts
+- [x] 4CPU/16Gi, SF=6849, 368Gi local-ssd (260K/230K IOPS), 3 hosts
+- [x] 16CPU/64Gi, SF=6849, 736Gi local-ssd (260K/230K IOPS), 3 hosts
 - [ ] 16CPU/64Gi, SF=34247, 736Gi local-ssd (260K/230K IOPS), 3 hosts
 
 #### MWS
